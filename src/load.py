@@ -25,7 +25,8 @@ def get_model(
     name_add = "_no_rejection" if no_rejection else ""
     if experiment_id is None:
         load_dict = torch.load(
-            "weights/weights_for_" + problem_name + "_" + str(dim) + name_add + ".pt"
+            "weights/weights_for_" + problem_name + "_" + str(dim) + name_add + ".pt",
+            map_location=device,
         )
     else:
         load_dict = torch.load(
@@ -36,7 +37,8 @@ def get_model(
             + "_"
             + str(experiment_id)
             + name_add
-            + ".pt"
+            + ".pt",
+            map_location=device,
         )
     structure = load_dict["structure"]
     step_sizes = load_dict["step_sizes"]

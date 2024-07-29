@@ -89,5 +89,6 @@ def get_config(problem=None, dim=None):
         args.num_steps_nf = 10000
         args.n_rejection_steps = 8
         args.n_samples = 100000
+        args.batch_size = 500
 
     return args

@@ -102,7 +102,9 @@ def train(
     dataset, dataset_energy = networks.sample(n_samples)
 
     def print_statistics(points, points_energy):
-        print(f"log Z estimator: {log_Z_estimator(points, points_energy, target_energy)}")
+        print(
+            f"log Z estimator: {log_Z_estimator(points, points_energy, target_energy)}"
+        )
         if sampler is not None:
             with torch.no_grad():
                 print(

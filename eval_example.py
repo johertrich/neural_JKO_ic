@@ -45,7 +45,9 @@ elif inp.problem == "lgcp":
     problem_name = "lgcp"
 
 if problem_name == "mixtures" and experiment_id is None:
-    raise ValueError("experiment_id is required for the GMM example for loading the same model as for training!")
+    raise ValueError(
+        "experiment_id is required for the GMM example for loading the same model as for training!"
+    )
 
 # make choice of the means reproducible if this is an mixture example
 # otherwise this argument will be ignored

@@ -87,7 +87,8 @@ def get_config(problem=None, dim=None):
         args.find_latent_mean = True
         args.lr = 5e-4
         args.num_steps_nf = 10000
-        args.n_rejection_steps = 8
+        args.n_flow_steps = 3
+        args.n_rejection_steps = 6
         args.n_samples = 100000
         args.batch_size = 500
 

@@ -1,6 +1,6 @@
 # Importance Corrected Neural JKO Sampling
 
-This repository contains the code for the paper "Importance Corrected Neural JKO Sampling" available at  
+This repository contains the code for the ICML 2025 paper "Importance Corrected Neural JKO Sampling" available at  
 http://arxiv.org/abs/2407.20444  
 Please cite the paper, if you use the code.
 
@@ -31,10 +31,10 @@ For the implementation of the continuous normalizing flows we used `torchdiffeq`
 ## Citation
 
 ```
-@article{neuralJKO_ic,
+@inproceedings{neuralJKO_ic,
   title={Importance Corrected Neural {JKO} Sampling},
   author={Johannes Hertrich and Robert Gruhlke},
-  journal={arXiv preprint arXiv:2407.20444},
-  year={2024}
+  booktitle={International Conference on Machine Learning},
+  year={2025}
 }
 ```

@@ -43,6 +43,9 @@ elif inp.problem == "GMM200":
 elif inp.problem == "lgcp":
     dim = 1600
     problem_name = "lgcp"
+elif inp.problem == "GMM40-50D":
+    dim = 50
+    problem_name = "GMM40"
 
 
 # make choice of the means reproducible if this is an mixture example

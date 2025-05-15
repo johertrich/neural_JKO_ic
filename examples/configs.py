@@ -23,7 +23,7 @@ def get_config(problem=None, dim=None):
 
     # Structure of the scheme
     args.n_rejection_steps = 6  # number of rejection blocks
-    args.n_flow_steps = None  # number of flow steps before the first rejection block. None chooses this adaptively
+    args.n_flow_steps = 4  # number of flow steps before the first rejection block. None chooses this adaptively
     args.initial_tau = 0.01  # initial choice of tau for the neural JKO steps (tau = step size in the JKO scheme)
     args.step_increase_base = 4  # multiply tau by this value after each neural JKO step
 
@@ -34,6 +34,8 @@ def get_config(problem=None, dim=None):
     args.find_latent_mean = False  # True for running an optimization scheme to change the mean of the latent distribution
     args.stack_size = 25000  # stack size for parallelized sampling (no effect on the results, but possibly on the speed)
     args.verbose = True  # print more training stats...
+    args.latent_scale = 1.0  # scale for the latent variable
+    args.grad_flow_step = False  # True for replacing the first CNF by running a gradient flow on the negative log-energy
 
     if problem is None:
         print(
@@ -91,5 +93,17 @@ def get_config(problem=None, dim=None):
         args.n_rejection_steps = 6
         args.n_samples = 100000
         args.batch_size = 500
+
+    if problem == "GMM40":
+        args.latent_scale = 40.0
+        args.n_samples = 50000
+        args.step_increase_base = 2.0
+        args.hidden_dim = 256
+        args.num_steps_nf = 2000
+        args.n_flow_steps = 4
+        args.n_rejection_steps = 7
+        args.initial_tau = 1.0
+        args.lr = 1e-3
+        args.grad_flow_step = True
 
     return args

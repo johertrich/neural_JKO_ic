@@ -47,6 +47,16 @@ def divergence_approx(f, y, e, training):
     return approx_tr_dzdx
 
 
+class GradientFlow(torch.nn.Module):
+    def __init__(self, energy_grad, factor=1.0):
+        super(GradientFlow, self).__init__()
+        self.energy_grad = energy_grad
+        self.factor = factor
+
+    def forward(self, t, x):
+        return -self.factor * self.energy_grad(x)
+
+
 class DenseODENet(torch.nn.Module):
     # simplified from ffjord
     def __init__(self, input_size, activation=torch.nn.ELU(), hidden_dims=[64, 64, 64]):

@@ -1,6 +1,6 @@
 # Training function for a importance corrected neural JKO model
 
-from src.CNF_utils import CNF, DenseODENet, ODEfunc
+from src.CNF_utils import CNF, DenseODENet, ODEfunc, GradientFlow
 from src.model import FlowModel, RejectionStep
 from src.metrics import sliced_energy_distance, log_Z_estimator, compute_mode_weights
 import torch
@@ -38,9 +38,40 @@ def train(
     lr_decay = args.lr_decay
     rejection_steps_per_block = args.rejection_steps_per_block
     resampling_rate = args.resampling_rate
+    latent_scale = args.latent_scale
+    grad_flow_step = args.grad_flow_step
 
     if not os.path.isdir("weights"):
         os.mkdir("weights")
+
+    def target_energy_grad(x, detach=False):
+        x_ = x.clone()
+        x_.requires_grad_()
+        with torch.set_grad_enabled(True):
+            energy = target_energy(x_)
+            grad = torch.autograd.grad(torch.sum(energy), x_, create_graph=not detach)[
+                0
+            ]
+        if detach:
+            grad = grad.detach()
+        return grad
+
+    def get_first_network():
+        # constructor for CNF
+        diffeq = GradientFlow(target_energy_grad, factor=3.0)
+        odefunc = ODEfunc(
+            diffeq=diffeq,
+            divergence_fn="approximate",
+        )
+        model = CNF(
+            odefunc=odefunc,
+            solver="dopri5",
+            atol=1e-3,
+            rtol=1e-3,
+            T=1.0,
+            solver_options={},
+        )
+        return model
 
     def get_network(layer_size, n_layers):
         # constructor for CNF
@@ -98,7 +129,9 @@ def train(
     # maximal number of networks...
     n_nets = 100
     taus = [initial_tau * step_increase_base**i for i in range(n_nets)]
-    networks = FlowModel(dim, batch_size=stack_size, latent_mean=my_mean)
+    networks = FlowModel(
+        dim, batch_size=stack_size, latent_mean=my_mean, latent_scale=latent_scale
+    )
     dataset, dataset_energy = networks.sample(n_samples)
 
     def print_statistics(points, points_energy):
@@ -150,45 +183,52 @@ def train(
     while net_num < n_nets:
         w2_mean = 0
         fs_mean = 0
-        model = get_network(hidden_dim, n_layers).to(device)
-        lr = lr_start
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        perm_ = torch.randperm(n_samples)
-        start_ind = 0
-        for steps in (progress_bar := tqdm(range(n_steps), disable=not verbose)):
-            if (steps + 1) % 100 == 0:
-                for g in optimizer.param_groups:
-                    lr = lr * lr_decay
-                    g["lr"] = lr
-            if start_ind + batch_size_x > n_samples:
-                start_ind = 0
-                perm_ = torch.randperm(n_samples)
-            optimizer.zero_grad()
-            perm = perm_[start_ind : start_ind + batch_size_x]
-            start_ind += batch_size_x
-            x = dataset[perm]
-            x_energy = dataset_energy[perm]
-            loss, w2_penalty = loss_function(model, x, x_energy, taus[net_num])
-            fs_mean = 0.9 * fs_mean + 0.1 * model.odefunc._num_evals.item()
-            loss.backward()
-            optimizer.step()
-            w2_mean = 0.9 * w2_mean + 0.1 * w2_penalty.item()
-            progress_bar.set_description(
-                "Loss: {0:.4f}, W2: {1:.4f}, LR: {2:.3f}e-3, fs_mean: {3:.1f}, W2_mean={4:.4f}".format(
-                    loss.item(), w2_penalty.item(), lr * 1e3, fs_mean, w2_mean
+        if net_num == 0 and grad_flow_step:
+            model = get_first_network()
+            x = dataset[:batch_size_x]
+            model(x, torch.zeros_like(dataset_energy[:batch_size_x]))
+            fs_mean = model.odefunc._num_evals.item()
+            model.eval()
+        else:
+            model = get_network(hidden_dim, n_layers).to(device)
+            lr = lr_start
+            optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+            perm_ = torch.randperm(n_samples)
+            start_ind = 0
+            for steps in (progress_bar := tqdm(range(n_steps), disable=not verbose)):
+                if (steps + 1) % 100 == 0:
+                    for g in optimizer.param_groups:
+                        lr = lr * lr_decay
+                        g["lr"] = lr
+                if start_ind + batch_size_x > n_samples:
+                    start_ind = 0
+                    perm_ = torch.randperm(n_samples)
+                optimizer.zero_grad()
+                perm = perm_[start_ind : start_ind + batch_size_x]
+                start_ind += batch_size_x
+                x = dataset[perm]
+                x_energy = dataset_energy[perm]
+                loss, w2_penalty = loss_function(model, x, x_energy, taus[net_num])
+                fs_mean = 0.9 * fs_mean + 0.1 * model.odefunc._num_evals.item()
+                loss.backward()
+                optimizer.step()
+                w2_mean = 0.9 * w2_mean + 0.1 * w2_penalty.item()
+                progress_bar.set_description(
+                    "Loss: {0:.4f}, W2: {1:.4f}, LR: {2:.3f}e-3, fs_mean: {3:.1f}, W2_mean={4:.4f}".format(
+                        loss.item(), w2_penalty.item(), lr * 1e3, fs_mean, w2_mean
+                    )
                 )
-            )
-        if not verbose:
-            print(
-                "Loss: {0:.4f}, W2: {1:.4f}, Num evals: {2}, fs_mean: {3:.1f}, W2_mean={4:.4f}".format(
-                    loss.item(),
-                    w2_penalty.item(),
-                    model.odefunc._num_evals.item(),
-                    fs_mean,
-                    w2_mean,
+            if not verbose:
+                print(
+                    "Loss: {0:.4f}, W2: {1:.4f}, Num evals: {2}, fs_mean: {3:.1f}, W2_mean={4:.4f}".format(
+                        loss.item(),
+                        w2_penalty.item(),
+                        model.odefunc._num_evals.item(),
+                        fs_mean,
+                        w2_mean,
+                    )
                 )
-            )
-        model.eval()
+            model.eval()
         model.solver = "rk4"
         model.solver_options = dict(step_size=1.0 / np.ceil(0.25 * fs_mean + 1))
         model.odefunc.exact = True

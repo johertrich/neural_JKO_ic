@@ -2,6 +2,7 @@ import argparse
 from src.load import get_model, eval_model
 from examples.configs import get_config
 from examples.energies import get_problem
+import numpy as np
 
 parser = argparse.ArgumentParser(description="Choosing problem")
 parser.add_argument("--problem", type=str, default="funnel")
@@ -43,6 +44,11 @@ elif inp.problem == "GMM200":
 elif inp.problem == "lgcp":
     dim = 1600
     problem_name = "lgcp"
+elif inp.problem == "GMM40-50D":
+    dim = 50
+    problem_name = "GMM40"
+
+eval_sinkhorn = problem_name == "GMM40"
 
 if problem_name == "mixtures" and experiment_id is None:
     raise ValueError(
@@ -81,9 +87,18 @@ model = get_model(target_energy, dim, args, problem_name, experiment_id)
 # samples, sample_energies = model.sample(n_samples)
 
 # compute evaluation metrics
-log_Z, energy_distance, mode_MSE, sampling_time = eval_model(
-    model, target_energy, sampler, means, stack_size=stack_size
+out = eval_model(
+    model,
+    target_energy,
+    sampler,
+    means,
+    stack_size=stack_size,
+    eval_sinkhorn=eval_sinkhorn,
 )
+if eval_sinkhorn:
+    log_Z, energy_distance, mode_MSE, sampling_time, s_losses = out
+else:
+    log_Z, energy_distance, mode_MSE, sampling_time = out
 
 print(f"The generation of 50000 samples took {sampling_time} seconds.")
 print(f"log(Z) estimate: {log_Z}")
@@ -91,3 +106,7 @@ if energy_distance is not None:
     print(f"Energy distance to target distribution: {energy_distance}")
 if mode_MSE is not None:
     print(f"Mode MSE: {mode_MSE}")
+if eval_sinkhorn:
+    print(
+        f"Sinkhorn distance to target distribution: {np.mean(s_losses)}+-{np.std(s_losses)}"
+    )

@@ -49,6 +49,11 @@ def get_problem(key, dim=None, additional_info={}):
         )
         axis = [[-1.3, 1.3], [-1.3, 1.3]]
         additional_info["means"] = means
+    elif key == "GMM40":
+        target_energy, sampler, means = GMM40(dim=dim)
+        dim = dim
+        axis = [[-2.3, 0.3], [-1.3, 1.3]]
+        additional_info["means"] = means
     elif key == "funnel":
         dim = 10 if dim is None else dim
         target_energy, sampler = funnel_guy(dim)
@@ -59,6 +64,46 @@ def get_problem(key, dim=None, additional_info={}):
         sampler = None
         axis = [[0, 10], [0, 10.0]]
     return target_energy, sampler, dim, axis, additional_info
+
+
+def GMM40(dim=2):
+    if dim == 50:
+        # use same means as "Sequential Controlled Langevin Diffusions"
+        with open("data/GMM40_mean.pck", "rb") as f:
+            means = pickle.load(f)
+        means = torch.tensor(means, device=device, dtype=torch.float)
+    else:
+        torch.random.manual_seed(0)
+        means = (torch.rand((40, dim)) - 0.5) * 2 * 40
+    means = means.to(device)
+    log_var = torch.ones((40, dim)) * 1.0
+    myvar = 1.0
+    cov = torch.diag_embed(log_var).to(device)
+    mix = torch.distributions.Categorical(torch.ones(40).to(device))
+    com = torch.distributions.MultivariateNormal(
+        means, scale_tril=cov, validate_args=False
+    )
+    mydist = torch.distributions.MixtureSameFamily(
+        mixture_distribution=mix, component_distribution=com, validate_args=False
+    )
+
+    def target_energy(x):
+        probs = (
+            -0.5 * torch.sum((x[:, None, :] - means[None, :, :]) ** 2, -1) / myvar**2
+            - dim / 2 * np.log(2 * torch.pi)
+            - dim * np.log(myvar)
+            - np.log(40)
+        )
+        probs = torch.logsumexp(probs, -1)
+        return -probs
+
+    def sampler(N):
+        out = []
+        for _ in range((N + 9999) // 10000):
+            out.append(mydist.sample((10000,)))
+        return torch.cat(out, 0)[:N]
+
+    return target_energy, sampler, means
 
 
 def schnauzbart(d=2):
